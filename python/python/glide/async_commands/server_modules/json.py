@@ -245,49 +245,93 @@ async def clear(
     return cast(int, await client.custom_command(args))
 
 
-async def debug(
+async def debug_fields(
     client: TGlideClient,
     subcommand: str,
     key: TEncodable,
     path: Optional[TEncodable] = None,
 ) -> Optional[Union[int, List[int]]]:
     """
-    Provides diagnostic information about a JSON document stored in Redis.
-    Supported subcommands are `MEMORY` and `FIELDS.
-
-    Subcommands:
-        MEMORY - Reports memory usage in bytes of a JSON value.
-        FIELDS - Reports the number of fields at the specified document path.
+    Reports the number of fields of the JSON value at the specified `path` within the JSON document stored at `key`.
 
     Args:
         client (TGlideClient): The client to execute the command.
-        subcommand (str): The subcommand to execute. Must be one of `MEMORY` or `FIELDS`.
+        subcommand (str): The subcommand to execute. Must be `FIELDS`.
         key (TEncodable): The key of the JSON document.
         path (Optional[TEncodable]): The path within the JSON document. Defaults to root if not provided.
 
     Returns:
         Optional[Union[bytes, List[bytes]]]:
             For JSONPath (`path` starts with `$`):
-                Returns an array of integers.
-                  for `MEMORY` command, it indicates the memory usage in bytes of a JSON value for each matched `path`.
-                  for `FIELDS` command, it indicates the number of fields for each matched `path`.
+                Returns an array of integers. indicating the number of fields for each matched `path`.
                 If `path` doesn't exist, an empty array will be returned.
             For legacy path (`path` doesn't start with `$`):
-                Returns an integer.
-                  for `MEMORY` command, it indicates the memory usage in bytes of a JSON value for each matched `path`.
-                  for `FIELDS` command, it indicates the number of fields for each matched `path`.
-                If multiple paths match, the memory usage/number of fields (depending on the executed command) of the first JSON value match is returned.
+                Returns an integer, indicating the number of fields for each matched `path`.
+                If multiple paths match, number of fields of the first JSON value match is returned.
                 If `path` doesn't exist, an error is raised.
+            If `path` is not provided, it reports the total number of fields in the entire JSON document.
             If `key` doesn't exist, None is returned.
 
     Examples:
         >>> from glide import json
         >>> await json.set(client, "k1", "$", '[1, 2.3, "foo", true, null, {}, [], {"a":1, "b":2}, [1,2,3]]')
             'OK'
-        >>> await json.debug(client, "MEMORY", "k1", "$[*]")
-            [16,16,19,16,16,16,16,66,64]
         >>> await json.debug(client, "FIELDS", "k1", "$[*]")
             [1,1,1,1,1,0,0,2,3]
+
+        >>> await json.set(client, "k1", "$", '{"firstName":"John","lastName":"Smith","age":27,"weight":135.25,"isAlive":true,"address":{"street":"21 2nd Street","city":"New York","state":"NY","zipcode":"10021-3100"},"phoneNumbers":[{"type":"home","number":"212 555-1234"},{"type":"office","number":"646 555-4567"}],"children":[],"spouse":null}')
+            'OK'
+        >>> await json.debug(client, "FIELDS", "k1")
+            19
+        >>> await json.debug(client, "FIELDS", "k1", ".address")
+            4
+    """
+    valid_subcommand = {"FIELDS"}
+    subcommand_upper = subcommand.upper()
+    if subcommand_upper not in valid_subcommand:
+        raise ValueError(
+            f"Invalid subcommand '{subcommand}'. Must be {valid_subcommand}."
+        )
+
+    args = ["JSON.DEBUG", subcommand, key]
+    if path:
+        args.append(path)
+
+    return cast(Optional[Union[int, List[int]]], await client.custom_command(args))
+
+
+async def debug_memory(
+    client: TGlideClient,
+    subcommand: str,
+    key: TEncodable,
+    path: Optional[TEncodable] = None,
+) -> Optional[Union[int, List[int]]]:
+    """
+    Reports memory usage in bytes of a JSON value. at the specified `path` within the JSON document stored at `key`.
+
+    Args:
+        client (TGlideClient): The client to execute the command.
+        subcommand (str): The subcommand to execute. Must be `MEMORY`.
+        key (TEncodable): The key of the JSON document.
+        path (Optional[TEncodable]): The path within the JSON document. Defaults to root if not provided.
+
+    Returns:
+        Optional[Union[bytes, List[bytes]]]:
+            For JSONPath (`path` starts with `$`):
+                Returns an array of integers. indicating the memory usage in bytes of a JSON value for each matched `path`.
+                If `path` doesn't exist, an empty array will be returned.
+            For legacy path (`path` doesn't start with `$`):
+                Returns an integer, indicating the number of fields for each matched `path`.
+                If multiple paths match, number of fields of the first JSON value match is returned.
+                If `path` doesn't exist, an error is raised.
+            If `path` is not provided, it reports the total memory usage in bytes in the entire JSON document.
+            If `key` doesn't exist, None is returned.
+    Examples:
+        >>> from glide import json
+        >>> await json.set(client, "k1", "$", '[1, 2.3, "foo", true, null, {}, [], {"a":1, "b":2}, [1,2,3]]')
+            'OK'
+        >>> await json.debug(client, "MEMORY", "k1", "$[*]")
+            [16,16,19,16,16,16,16,66,64]
 
         >>> await json.set(client, "k1", "$", '{"firstName":"John","lastName":"Smith","age":27,"weight":135.25,"isAlive":true,"address":{"street":"21 2nd Street","city":"New York","state":"NY","zipcode":"10021-3100"},"phoneNumbers":[{"type":"home","number":"212 555-1234"},{"type":"office","number":"646 555-4567"}],"children":[],"spouse":null}')
             'OK'
@@ -295,11 +339,14 @@ async def debug(
             472
         >>> await json.debug(client, "MEMORY", "k1", ".phoneNumbers")
             164
-        >>> await json.debug(client, "FIELDS", "k1")
-            19
-        >>> await json.debug(client, "FIELDS", "k1", ".address")
-            4
     """
+    valid_subcommand = {"MEMORY"}
+    subcommand_upper = subcommand.upper()
+    if subcommand_upper not in valid_subcommand:
+        raise ValueError(
+            f"Invalid subcommand '{subcommand}'. Must be {valid_subcommand}."
+        )
+
     args = ["JSON.DEBUG", subcommand, key]
     if path:
         args.append(path)
